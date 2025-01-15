@@ -1,5 +1,14 @@
 #!/bin/bash
-# Description: This script demonstrates how to inference a video based on HunyuanVideo model
+#SBATCH -J Test_HunyuanVideo
+#SBATCH -p hopper
+#SBATCH -A r01156
+#SBATCH -o /N/slate/fanjye/repo/VSR_project/HunyuanVideo/scripts/shell_logs/Test_HunyuanVideo_multigpu_%j.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=4
+#SBATCH --cpus-per-task=64
+#SBATCH --time=2-00:00:00
+
 
 # Supported Parallel Configurations
 # |     --video-size     | --video-length | --ulysses-degree x --ring-degree | --nproc_per_node |
@@ -28,12 +37,34 @@
 
 export TOKENIZERS_PARALLELISM=false
 
-export NPROC_PER_NODE=8
-export ULYSSES_DEGREE=8
+export NPROC_PER_NODE=4
+export ULYSSES_DEGREE=4
 export RING_DEGREE=1
 
+module load conda
+conda activate /N/slate/fanjye/condaenv/HunyuanVideo
+module load cudatoolkit/11.8
+cd /N/slate/fanjye/repo/VSR_project/Hunyuan-VSR
+
+set -x
+# Use Nsight System profile
+# nsys profile --gpu-metrics-device=all --cuda-memory-usage=true --output=/N/slate/fanjye/repo/VSR_project/HunyuanVideo/scripts/profile_result/Multigpu_inferstep-4 \
+# 	torchrun --nproc_per_node=$NPROC_PER_NODE sample_video.py \
+# 		--video-size 1280 720 \
+# 		--video-length 129 \
+# 		--infer-steps 5 \
+# 		--prompt "A dancing Couple of cute Ghost, Night Spring ambience, pixar style." \
+# 		--seed 42 \
+# 		--embedded-cfg-scale 6.0 \
+# 		--flow-shift 7.0 \
+# 		--flow-reverse \
+# 		--ulysses-degree=$ULYSSES_DEGREE \
+# 		--ring-degree=$RING_DEGREE \
+# 		--save-path ./results
+
+# Use pytorch profiler
 torchrun --nproc_per_node=$NPROC_PER_NODE sample_video.py \
-	--video-size 720 1280 \
+	--video-size 1280 720 \
 	--video-length 129 \
 	--infer-steps 50 \
 	--prompt "A cat walks on the grass, realistic style." \
