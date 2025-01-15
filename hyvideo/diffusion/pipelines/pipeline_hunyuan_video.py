@@ -16,7 +16,7 @@
 # Modified from diffusers==0.29.2
 #
 # ==============================================================================
-import inspect
+import inspect, time
 from typing import Any, Callable, Dict, List, Optional, Union, Tuple
 import torch
 import torch.distributed as dist
@@ -807,6 +807,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         # width = width or self.transformer.config.sample_size * self.vae_scale_factor
         # to deal with lora scaling and other possible forward hooks
 
+        start_pipleline = time.time()
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(
             prompt,
@@ -826,6 +827,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         self._clip_skip = clip_skip
         self._cross_attention_kwargs = cross_attention_kwargs
         self._interrupt = False
+        end_step1 = time.time()
+        step1_duration = end_step1 - start_pipleline
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -836,6 +839,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             batch_size = prompt_embeds.shape[0]
 
         device = torch.device(f"cuda:{dist.get_rank()}") if dist.is_initialized() else self._execution_device
+        end_step2 = time.time()
+        step2_duration = end_step2 - end_step1
 
         # 3. Encode input prompt
         lora_scale = (
@@ -902,6 +907,8 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             if prompt_mask_2 is not None:
                 prompt_mask_2 = torch.cat([negative_prompt_mask_2, prompt_mask_2])
 
+        end_step3 = time.time()
+        step3_duration = end_step3 - end_step2
 
         # 4. Prepare timesteps
         extra_set_timesteps_kwargs = self.prepare_extra_func_kwargs(
@@ -923,6 +930,9 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         else:
             video_length = video_length
 
+        end_step4 = time.time()
+        step4_duration = end_step4 - end_step3
+
         # 5. Prepare latent variables
         num_channels_latents = self.transformer.config.in_channels
         latents = self.prepare_latents(
@@ -936,6 +946,9 @@ class HunyuanVideoPipeline(DiffusionPipeline):
             generator,
             latents,
         )
+
+        end_step5 = time.time()
+        step5_duration = end_step5 - end_step4
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_func_kwargs(
@@ -951,6 +964,9 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         vae_autocast_enabled = (
             vae_dtype != torch.float32
         ) and not self.args.disable_autocast
+
+        end_step6 = time.time()
+        step6_duration = end_step6 - end_step5
 
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
@@ -1044,6 +1060,9 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                         step_idx = i // getattr(self.scheduler, "order", 1)
                         callback(step_idx, t, latents)
 
+        end_step7 = time.time()
+        step7_duration = end_step7 - end_step6
+
         if not output_type == "latent":
             expand_temporal_dim = False
             if len(latents.shape) == 4:
@@ -1094,6 +1113,9 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         # Offload all models
         self.maybe_free_model_hooks()
 
+        end_step8 = time.time()
+        step8_duration = end_step8 - end_step7
+        print(f"Time for different steps: {step1_duration}, {step2_duration}, {step3_duration}, {step4_duration}, {step5_duration}, {step6_duration}, {step7_duration}, {step8_duration}")
         if not return_dict:
             return image
 
