@@ -36,7 +36,8 @@ except:
     initialize_model_parallel = None
     init_distributed_environment = None
 
-
+# PROFILE = True
+PROFILE = False
 def parallelize_transformer(pipe):
     transformer = pipe.transformer
     original_forward = transformer.forward
@@ -642,26 +643,117 @@ class HunyuanVideoSampler(Inference):
         # ========================================================================
         # Pipeline inference
         # ========================================================================
-        start_time = time.time()
-        samples = self.pipeline(
-            prompt=prompt,
-            height=target_height,
-            width=target_width,
-            video_length=target_video_length,
-            num_inference_steps=infer_steps,
-            guidance_scale=guidance_scale,
-            negative_prompt=negative_prompt,
-            num_videos_per_prompt=num_videos_per_prompt,
-            generator=generator,
-            output_type="pil",
-            freqs_cis=(freqs_cos, freqs_sin),
-            n_tokens=n_tokens,
-            embedded_guidance_scale=embedded_guidance_scale,
-            data_type="video" if target_video_length > 1 else "image",
-            is_progress_bar=True,
-            vae_ver=self.args.vae,
-            enable_tiling=self.args.vae_tiling,
-        )[0]
+
+        if PROFILE == True:
+            # Start profiling with Nsight Systems
+            torch.cuda.cudart().cudaProfilerStart()
+            # Add NVTX markers for profiling
+            with torch.autograd.profiler.emit_nvtx(record_shapes=True):
+                # Synchronize before starting the timer
+                # torch.cuda.synchronize()
+                start_time = time.time()
+
+                # Execute the pipeline
+                samples = self.pipeline(
+                    prompt=prompt,
+                    height=target_height,
+                    width=target_width,
+                    video_length=target_video_length,
+                    num_inference_steps=infer_steps,
+                    guidance_scale=guidance_scale,
+                    negative_prompt=negative_prompt,
+                    num_videos_per_prompt=num_videos_per_prompt,
+                    generator=generator,
+                    output_type="pil",
+                    freqs_cis=(freqs_cos, freqs_sin),
+                    n_tokens=n_tokens,
+                    embedded_guidance_scale=embedded_guidance_scale,
+                    data_type="video" if target_video_length > 1 else "image",
+                    is_progress_bar=True,
+                    vae_ver=self.args.vae,
+                    enable_tiling=self.args.vae_tiling,
+                )[0]
+            # End profiling
+            torch.cuda.cudart().cudaProfilerStop()
+        else:
+            start_time = time.time()
+            samples = self.pipeline(
+                prompt=prompt,
+                height=target_height,
+                width=target_width,
+                video_length=target_video_length,
+                num_inference_steps=infer_steps,
+                guidance_scale=guidance_scale,
+                negative_prompt=negative_prompt,
+                num_videos_per_prompt=num_videos_per_prompt,
+                generator=generator,
+                output_type="pil",
+                freqs_cis=(freqs_cos, freqs_sin),
+                n_tokens=n_tokens,
+                embedded_guidance_scale=embedded_guidance_scale,
+                data_type="video" if target_video_length > 1 else "image",
+                is_progress_bar=True,
+                vae_ver=self.args.vae,
+                enable_tiling=self.args.vae_tiling,
+            )[0]
+
+        # For pytorch profiler. 
+        # if PROFILE == True:
+        #     with torch.profiler.profile(
+        #         activities=[
+        #         torch.profiler.ProfilerActivity.CPU,
+        #         torch.profiler.ProfilerActivity.CUDA
+        #     ],
+        #     on_trace_ready=torch.profiler.tensorboard_trace_handler("/N/slate/fanjye/repo/VSR_project/HunyuanVideo/scripts/profile_result/pytorch_profiler"),
+        #     record_shapes=True, 
+        #     profile_memory=True, 
+        #     with_stack=True       
+        #     ) as prof:
+        #         # Synchronize before starting the timer
+        #         # torch.cuda.synchronize()
+        #         start_time = time.time()
+
+        #         # Execute the pipeline
+        #         samples = self.pipeline(
+        #             prompt=prompt,
+        #             height=target_height,
+        #             width=target_width,
+        #             video_length=target_video_length,
+        #             num_inference_steps=infer_steps,
+        #             guidance_scale=guidance_scale,
+        #             negative_prompt=negative_prompt,
+        #             num_videos_per_prompt=num_videos_per_prompt,
+        #             generator=generator,
+        #             output_type="pil",
+        #             freqs_cis=(freqs_cos, freqs_sin),
+        #             n_tokens=n_tokens,
+        #             embedded_guidance_scale=embedded_guidance_scale,
+        #             data_type="video" if target_video_length > 1 else "image",
+        #             is_progress_bar=True,
+        #             vae_ver=self.args.vae,
+        #             enable_tiling=self.args.vae_tiling,
+        #         )[0]
+        # else:
+        #     start_time = time.time()
+        #     samples = self.pipeline(
+        #         prompt=prompt,
+        #         height=target_height,
+        #         width=target_width,
+        #         video_length=target_video_length,
+        #         num_inference_steps=infer_steps,
+        #         guidance_scale=guidance_scale,
+        #         negative_prompt=negative_prompt,
+        #         num_videos_per_prompt=num_videos_per_prompt,
+        #         generator=generator,
+        #         output_type="pil",
+        #         freqs_cis=(freqs_cos, freqs_sin),
+        #         n_tokens=n_tokens,
+        #         embedded_guidance_scale=embedded_guidance_scale,
+        #         data_type="video" if target_video_length > 1 else "image",
+        #         is_progress_bar=True,
+        #         vae_ver=self.args.vae,
+        #         enable_tiling=self.args.vae_tiling,
+        #     )[0]
         out_dict["samples"] = samples
         out_dict["prompts"] = prompt
 
